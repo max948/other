@@ -23,7 +23,7 @@ data "aws_availability_zones" "availableAZ" {}
 # Public Subnet 01
 resource "aws_subnet" "publicsubnet01" {
   cidr_block              = "10.0.1.0/24" # Hardcoded this
-  vpc_id                  = "${aws_vpc.my_vpc.id}"
+  vpc_id                  = aws_vpc.my_vpc.id
   map_public_ip_on_launch = true
   availability_zone       = "eu-west-1a" # Hardcoded this
 
@@ -37,7 +37,7 @@ resource "aws_subnet" "publicsubnet01" {
 # Public Subnet 02
 resource "aws_subnet" "publicsubnet02" {
   cidr_block              = "10.0.3.0/24" # Hardcoded this
-  vpc_id                  = "${aws_vpc.my_vpc.id}"
+  vpc_id                  = aws_vpc.my_vpc.id
   map_public_ip_on_launch = true
   availability_zone       = "eu-west-1b" # Hardcoded this
 
@@ -52,7 +52,7 @@ resource "aws_subnet" "publicsubnet02" {
 # Private Subnet 01
 resource "aws_subnet" "privatesubnet01" {
   cidr_block              = "10.0.2.0/24" # Hardcoded this
-  vpc_id                  = "${aws_vpc.my_vpc.id}"
+  vpc_id                  = aws_vpc.my_vpc.id
   map_public_ip_on_launch = true
   availability_zone       = "eu-west-1a" # Hardcoded this
 
@@ -66,7 +66,7 @@ resource "aws_subnet" "privatesubnet01" {
 # Private Subnet 02
 resource "aws_subnet" "privatesubnet02" {
   cidr_block              = "10.0.4.0/24" # Hardcoded this
-  vpc_id                  = "${aws_vpc.my_vpc.id}"
+  vpc_id                  = aws_vpc.my_vpc.id
   map_public_ip_on_launch = true
   availability_zone       = "eu-west-1b" # Hardcoded this
 
@@ -81,7 +81,7 @@ resource "aws_subnet" "privatesubnet02" {
 # we should use "resource "aws_internet_gateway"" (AWS Internet Gateway service)
 
 resource "aws_internet_gateway" "internetgateway" {
-  vpc_id = "${aws_vpc.my_vpc.id}"
+  vpc_id = aws_vpc.my_vpc.id
   tags = {
     Name = "${var.environment}-InternetGateway"
   }
@@ -91,7 +91,7 @@ resource "aws_internet_gateway" "internetgateway" {
 # as an our "custom :-)" settings for AWS Internet Gateway service
 
 resource "aws_route_table" "publicroutetable" {
-  vpc_id = "${aws_vpc.my_vpc.id}"
+  vpc_id = aws_vpc.my_vpc.id
   route {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.internetgateway.id
@@ -106,7 +106,7 @@ resource "aws_route_table" "publicroutetable" {
 # Note that the default route, mapping the VPC's CIDR block to "local", is created implicitly and cannot be specified.
 
 resource "aws_route_table" "privateroutetable" {
-  vpc_id = "${aws_vpc.my_vpc.id}"
+  vpc_id = aws_vpc.my_vpc.id
   #route = [] #original
   route {
     cidr_block = "0.0.0.0/0"
@@ -144,8 +144,6 @@ resource "aws_route_table_association" "Private01" {
 }
 
 
-
-
 resource "aws_route_table_association" "Private02" {
   route_table_id = aws_route_table.privateroutetable.id
   subnet_id      = aws_subnet.privatesubnet02.id
@@ -155,7 +153,7 @@ resource "aws_route_table_association" "Private02" {
 
 resource "aws_security_group" "SecurityGroup_EC2inPublicSubnet" {
   name = "Security Group for EC2 instances public subnets"
-  vpc_id = "${aws_vpc.my_vpc.id}"
+  vpc_id = aws_vpc.my_vpc.id
 
   dynamic "ingress" {
     for_each = var.allowed_ports
@@ -195,7 +193,7 @@ resource "aws_instance" "Public_Linux_01" {
 
   ami                    = data.aws_ami.latest_amazon_linux.id
   instance_type          = var.instance_type
-  subnet_id              = "${aws_subnet.publicsubnet01.id}"
+  subnet_id              = aws_subnet.publicsubnet01.id
   vpc_security_group_ids = [aws_security_group.SecurityGroup_EC2inPublicSubnet.id]
 
   user_data = file("./install_apache.sh")
@@ -213,7 +211,7 @@ resource "aws_instance" "Public_Linux_02" {
 
   ami                    = data.aws_ami.latest_amazon_linux.id
   instance_type          = var.instance_type
-  subnet_id              = "${aws_subnet.publicsubnet02.id}"
+  subnet_id              = aws_subnet.publicsubnet02.id
   vpc_security_group_ids = [aws_security_group.SecurityGroup_EC2inPublicSubnet.id]
   user_data = file("./install_apache.sh")
 
@@ -228,7 +226,7 @@ resource "aws_instance" "Private_Linux_01" {
 
   ami                    = data.aws_ami.latest_amazon_linux.id
   instance_type          = var.instance_type
-  subnet_id              = "${aws_subnet.privatesubnet01.id}"
+  subnet_id              = aws_subnet.privatesubnet01.id
   vpc_security_group_ids = [aws_security_group.SecurityGroup_EC2inPublicSubnet.id]
 
   user_data = file("./install_apache.sh")
@@ -243,7 +241,7 @@ resource "aws_instance" "Private_Linux_02" {
 
   ami                    = data.aws_ami.latest_amazon_linux.id
   instance_type          = var.instance_type
-  subnet_id              = "${aws_subnet.privatesubnet02.id}"
+  subnet_id              = aws_subnet.privatesubnet02.id
   vpc_security_group_ids = [aws_security_group.SecurityGroup_EC2inPublicSubnet.id]
 
   user_data = file("./install_apache.sh")
@@ -258,10 +256,13 @@ resource "aws_instance" "Private_Linux_02" {
 #########################
 # Step 5: NAT Gateway
 
+# Step1 is EIP; Step 2 is Create NAT, depends on IG;
+
 # Create elastic IP address
 
 resource "aws_eip" "eip01" {
-  instance = aws_instance.Public_Linux_01.id
+  #instance = aws_instance.Public_Linux_01.id
+
   vpc      = true
 
   tags = {
@@ -269,12 +270,14 @@ resource "aws_eip" "eip01" {
   }
 
   depends_on = [aws_internet_gateway.internetgateway] # not sure if bracket syntax is correct
+  # NAT gw depends on elastic IP.
 }
 
 resource "aws_nat_gateway" "nat_gateway_01" {
-  allocation_id = "#{aws_eip.eip01.id}"
+  #allocation_id = "${aws_eip.eip01.id}"
+  allocation_id = aws_eip.eip01.id
   #allocation_id = aws_eip.example.id
-  subnet_id     = "${aws_subnet.publicsubnet01.id}"
+  subnet_id     = aws_subnet.publicsubnet01.id
   #subnet_id     = aws_subnet.example.id
 
   tags = {
@@ -285,8 +288,9 @@ resource "aws_nat_gateway" "nat_gateway_01" {
   #}
   # To ensure proper ordering, it is recommended to add an explicit dependency
   # on the Internet Gateway for the VPC.
-  depends_on = [aws_internet_gateway.internetgateway, aws_eip.eip01] # not sure if bracket syntax is correct
+  depends_on = [aws_internet_gateway.internetgateway] # not sure if bracket syntax is correct
   #  depends_on = [aws_internet_gateway.example]
+
 }
 
 #Error: error creating EC2 NAT Gateway: InvalidElasticIpID.Malformed: The elastic-ip ID '#{aws_eip.eip01.id}' is malformed
